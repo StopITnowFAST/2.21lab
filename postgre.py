@@ -2,68 +2,70 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import sqlite3
+import psycopg2
 import sys
 import typing as t
 from pathlib import Path
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 
-def add_st(database_path: Path, name: str, group: str, lmarks: str) -> None:
+def connect(name_db: str):
+    conn = psycopg2.connect(
+        user="postgres",
+        password="hehehaha",
+        host="127.0.0.1",
+        port="5432",
+        database=name_db
+    )
+    return conn
+
+
+def add_st(name: str, group: str, lmarks: str, db_name: str) -> None:
     """
     Ввести данные студента в базу данных
     """
-    conn = sqlite3.connect(database_path)
+
+    conn = connect(db_name)
     cursor = conn.cursor()
 
     cursor.execute(
         """
         INSERT INTO marks (marks_list) 
-        VALUES (?)
+        VALUES (%s)
         """,
-        (lmarks,),
+        (lmarks, )
     )
-
-    mark_id = cursor.lastrowid
 
     cursor.execute(
         """
-        INSERT INTO students (student_name, mark_id, student_group)
-        VALUES (?, ?, ?)
+        INSERT INTO students (student_name, student_group)
+        VALUES (%s, %s)
         """,
-        (name, mark_id, group),
+        (name, group)
     )
     conn.commit()
     conn.close()
 
 
-def create_db(database_path: Path) -> None:
+def create_db(name_db: str) -> None:
     """
     Создать базу данных.
     """
-    conn = sqlite3.connect(database_path)
+
+    conn = connect(name_db)
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS marks (
-            mark_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            marks_list TEXT NOT NULL
-        )
-        """
-    )
+    cursor.execute('''CREATE TABLE IF NOT EXISTS marks 
+        (mark_id serial PRIMARY KEY,
+        marks_list TEXT NOT NULL);''')
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS students (
-            student_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT NOT NULL,
-            student_group TEXT NOT NULL,
-            mark_id INTEGER NOT NULL,
-            FOREIGN KEY(mark_id) REFERENCES marks(mark_id)
-        )
-        """
-    )
+    cursor.execute('''CREATE TABLE IF NOT EXISTS students 
+        (student_id serial PRIMARY KEY,
+        student_name TEXT NOT NULL,
+        student_group TEXT NOT NULL,
+        mark_id serial REFERENCES marks);''')
 
+    conn.commit()
     conn.close()
 
 
@@ -96,11 +98,12 @@ def show(staff: t.List[t.Dict[str, t.Any]]) -> None:
         print("Список пуст")
 
 
-def select_all(database_path: Path) -> t.List[t.Dict[str, t.Any]]:
+def select_all(db_name: str) -> t.List[t.Dict[str, t.Any]]:
     """
     Выбрать всех студентов.
     """
-    conn = sqlite3.connect(database_path)
+    conn = connect(db_name)
+
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -122,11 +125,12 @@ def select_all(database_path: Path) -> t.List[t.Dict[str, t.Any]]:
     ]
 
 
-def marks(database_path: Path) -> t.List[t.Dict[str, t.Any]]:
+def marks(db_name: str) -> t.List[t.Dict[str, t.Any]]:
     """
     Выбрать всех студентов у кого присутствует оценка 2.
     """
-    conn = sqlite3.connect(database_path)
+    conn = connect(db_name)
+
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -189,23 +193,48 @@ def main(command_line=None):
 
     args = parser.parse_args(command_line)
 
-    db_path = Path(args.db)
-    create_db(db_path)
-
     match args.command:
         case "add":
-            buf = [int(a) for a in args.marks]
-            rightmarks = list(filter(lambda x: 0 < x < 6, buf))
-            if len(rightmarks) != 5:
-                print("ошибка в количестве или значении оценок", file=sys.stderr)
-                exit()
-            add_st(db_path, args.name, args.group, args.marks)
+            conn = psycopg2.connect(
+                user="postgres",
+                password="hehehaha",
+                host="127.0.0.1",
+                port="5432"
+            )
+            cursor = conn.cursor()
+            cursor.execute("SELECT datname FROM pg_database;")
+            list_database = cursor.fetchall()
+            if (args.db,) in list_database:
+                buf = [int(a) for a in args.marks]
+                rightmarks = list(filter(lambda x: 0 < x < 6, buf))
+                if len(rightmarks) != 5:
+                    print("ошибка в количестве или значении оценок", file=sys.stderr)
+                    exit()
+                add_st(args.name, args.group, args.marks, args.db)
+            else:
+                conn = psycopg2.connect(
+                    user="postgres",
+                    password="hehehaha"
+                )
+                conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+                cursor = conn.cursor()
+                create = "create database " + args.db + ";"
+                cursor.execute(create)
+
+                create_db(args.db)
+
+                buf = [int(a) for a in args.marks]
+                rightmarks = list(filter(lambda x: 0 < x < 6, buf))
+                if len(rightmarks) != 5:
+                    print("ошибка в количестве или значении оценок", file=sys.stderr)
+                    exit()
+                add_st(args.name, args.group, args.marks, args.db)
 
         case "show":
-            show(select_all(db_path))
+            show(select_all(args.db))
 
         case "show_marks":
-            show(marks(db_path))
+            show(marks(args.db))
 
 
 if __name__ == "__main__":
