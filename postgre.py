@@ -15,7 +15,7 @@ def connect(name_db: str):
         password="hehehaha",
         host="127.0.0.1",
         port="5432",
-        database=name_db
+        database=name_db,
     )
     return conn
 
@@ -33,7 +33,7 @@ def add_st(name: str, group: str, lmarks: str, db_name: str) -> None:
         INSERT INTO marks (marks_list) 
         VALUES (%s)
         """,
-        (lmarks, )
+        (lmarks,),
     )
 
     cursor.execute(
@@ -41,7 +41,7 @@ def add_st(name: str, group: str, lmarks: str, db_name: str) -> None:
         INSERT INTO students (student_name, student_group)
         VALUES (%s, %s)
         """,
-        (name, group)
+        (name, group),
     )
     conn.commit()
     conn.close()
@@ -55,15 +55,19 @@ def create_db(name_db: str) -> None:
     conn = connect(name_db)
     cursor = conn.cursor()
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS marks 
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS marks 
         (mark_id serial PRIMARY KEY,
-        marks_list TEXT NOT NULL);''')
+        marks_list TEXT NOT NULL);"""
+    )
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS students 
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS students 
         (student_id serial PRIMARY KEY,
         student_name TEXT NOT NULL,
         student_group TEXT NOT NULL,
-        mark_id serial REFERENCES marks);''')
+        mark_id serial REFERENCES marks);"""
+    )
 
     conn.commit()
     conn.close()
@@ -196,10 +200,7 @@ def main(command_line=None):
     match args.command:
         case "add":
             conn = psycopg2.connect(
-                user="postgres",
-                password="hehehaha",
-                host="127.0.0.1",
-                port="5432"
+                user="postgres", password="hehehaha", host="127.0.0.1", port="5432"
             )
             cursor = conn.cursor()
             cursor.execute("SELECT datname FROM pg_database;")
@@ -212,10 +213,7 @@ def main(command_line=None):
                     exit()
                 add_st(args.name, args.group, args.marks, args.db)
             else:
-                conn = psycopg2.connect(
-                    user="postgres",
-                    password="hehehaha"
-                )
+                conn = psycopg2.connect(user="postgres", password="hehehaha")
                 conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
                 cursor = conn.cursor()
                 create = "create database " + args.db + ";"
